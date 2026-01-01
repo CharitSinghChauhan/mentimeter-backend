@@ -1,6 +1,6 @@
 import z from "zod";
 
-export const createQuizzSchema = z.object({
+export const createQuizSchema = z.object({
   title: z
     .string()
     .min(2, "Title must be at least 2 characters")
@@ -22,10 +22,17 @@ export const questionArraySchema = z.object({
               .min(1, "Option must be at least 1 character")
               .max(100, "Option must not exceed 100 characters")
           ),
-          correctAnsIndex: z.number().positive(),
+          correctAnsIndex: z
+            .number()
+            .positive("correctIndex should be postive"),
+          timeLimit: z.number().positive("time limit invalid"),
+          points: z.number().positive("points should be positive").optional(),
         })
         .superRefine((data, ctx) => {
-          if (data.correctAnsIndex < 0 || data.correctAnsIndex >= data.options.length) {
+          if (
+            data.correctAnsIndex < 0 ||
+            data.correctAnsIndex >= data.options.length
+          ) {
             ctx.addIssue({
               path: ["correctAnsIndex"],
               message: "Answer index must be within the options range",

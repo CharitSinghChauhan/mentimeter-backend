@@ -45,12 +45,21 @@ model Session {
   @@map("session")
 }
 
+enum QuizStautus {
+  CREATED // created but user can join for review
+  LIVE // user can join
+  STARTED 
+  OVER 
+}
+
 model Quiz {
   id          String     @id @default(uuid()) @db.Uuid
-  title       String     @db.VarChar(200)
+  title       String     @unique @db.VarChar(200)
   createdBy   User       @relation(fields: [createdById], references: [id])
   createdById String
-  isPublished Boolean    @default(false)
+  // TODO : enum not starting | going on | finish
+  // TODO : result 
+  status     QuizStautus @default(CREATED)
   createdAt   DateTime   @default(now())
   questions   Question[]
 }
@@ -58,8 +67,9 @@ model Quiz {
 model Question {
   id                 String   @id @default(uuid()) @db.Uuid
   quiz               Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  // from the params
   quizId             String   @db.Uuid
-  // TODO : enum 
+  // TODO : enum
   type               String   @db.VarChar(20)
   text               String
   options            String[]
