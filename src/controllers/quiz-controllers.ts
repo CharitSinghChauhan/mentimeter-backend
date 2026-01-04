@@ -3,7 +3,10 @@ import { createQuizSchema, questionArraySchema } from "../zod/zod-schema";
 import ErrorResponse from "../utils/error-response";
 import prisma from "../lib/prisma";
 import apiResponse from "../utils/api-response";
-import { randomUUIDv7, redis } from "bun";
+import { redis } from "bun";
+import REDIS_KEYS from "../ws/utils/redis-keys";
+import io from "..";
+import { nanoid } from "nanoid";
 
 export const createQuizController = async (req: Request, res: Response) => {
   const zodResponse = createQuizSchema.safeParse(req.body);
@@ -91,8 +94,8 @@ export const addQuestionToQuiz = async (req: Request, res: Response) => {
           // TODO : what if there already questions
           orderIndex: index,
         },
-      })
-    )
+      }),
+    ),
   );
 
   return apiResponse(res, 201, "question add successfully", null);
@@ -130,17 +133,16 @@ export const makeQuizLive = async (req: Request, res: Response) => {
   });
 
   // store in user localStorage
-  const sessionCode = randomUUIDv7().substring(0, 5);
+
+  const sessionCode = nanoid(6);
 
   // TODO : when session expires delete it
 
-  // quiz id map to session code // string
-  await redis.set(`quiz_id:${quizId}`, sessionCode);
-  // create the redis session
-  // REDIS save it on the user local localStorage
-  await redis.hset(`session:${sessionCode}`, {
+  await redis.set(REDIS_KEYS.SessionCode(quizId), sessionCode);
+
+  await redis.hset(REDIS_KEYS.CurrentQuiz(sessionCode), {
     quizId: quizId,
-    status: "live",
+    status: "LIVE",
   });
 
   return apiResponse(res, 204, "quiz is now live", { sessionCode });
@@ -162,6 +164,9 @@ export const startQuiz = async (req: Request, res: Response) => {
 
   if (!isQuizExist) throw new ErrorResponse(404, "quiz does not exist");
 
+  if (isQuizExist.status === "LIVE")
+    throw new ErrorResponse(409, "quiz is already live");
+
   await prisma.quiz.update({
     where: {
       id: quizId,
@@ -176,31 +181,26 @@ export const startQuiz = async (req: Request, res: Response) => {
       quizId: quizId,
     },
     select: {
+      id: true,
       text: true,
       options: true,
       timeLimit: true,
       points: true,
+      correctOptionIndex: true,
       orderIndex: true,
     },
   });
 
-  const ansOfQuestions = await prisma.question.findMany({
-    where: {
-      quizId: quizId,
-    },
-    select: {
-      correctOptionIndex: true,
-    },
-  });
-
-  const sessionCode = await redis.get(`quiz_id:${quizId}`);
+  const sessionCode = await redis.get(REDIS_KEYS.SessionCode(quizId));
 
   if (!sessionCode) throw new ErrorResponse(404, "session does not exit");
 
-  // setting the
-  await redis.hset(`session${sessionCode}`, "status", "started");
+  await redis.hset(REDIS_KEYS.CurrentQuiz(sessionCode), "status", "STARTED");
+
   for (const q of quizQuestions)
-    await redis.rpush(`questions${sessionCode}`, JSON.stringify(q));
+    await redis.rpush(REDIS_KEYS.Question(sessionCode), JSON.stringify(q));
+
+  io.to(`${sessionCode}`).emit("quiz-started", { quizId });
 
   return apiResponse(res, 200, "Quiz is live", null);
 };

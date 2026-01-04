@@ -1,110 +1,122 @@
 import { redis } from "bun";
-import { io } from "../index";
+import io from "../index";
+import QuizClass from "./quiz-class";
+import { sessionCheck } from "./utils/checks";
 import { wsFailedResponse, wsSuccessResponse } from "./ws-response";
+import REDIS_KEYS from "./utils/redis-keys";
+import { nanoid } from "nanoid";
 
-// TODO : check everywhere the question and quiz send or started only when it should
-// do not trigger the event from the client side
+const rooms = new Map<string, QuizClass>();
 
-const sessionCheck = async (sessionCode: string, status: string) => {
-  if (!sessionCode) return wsFailedResponse("quiz code needed", null);
-
-  const isSessionExist = await redis.hget(`session:${sessionCode}`, "status");
-
-  if (!isSessionExist || isSessionExist !== status)
-    return wsFailedResponse(
-      "session doesn't exit or quiz is not ready yet",
-      null
-    );
-
-  return wsSuccessResponse("sessionCheck successfully", null);
-};
-
-const establisWsConnection = () => {
+const establishWsConnection = () => {
   io.on("connection", (socket) => {
-    console.log("user-enter");
-
-    // EVENT join-quiz-session
-    socket.on("join-quiz-session", async (data, callback) => {
-      // add the zod validation
+    // @EVENT :: user joins the quiz and add to room
+    socket.on("user-join-quiz", async (data, callback) => {
       try {
         const { sessionCode, nickname } = data;
 
-        const sessionCheckResponse = await sessionCheck(sessionCode, "live");
+        // TODO : Check for nickname
+        const sessionCheckResponse = await sessionCheck(sessionCode, "LIVE");
 
-        if (!sessionCheckResponse.success)
-          return callback(sessionCheckResponse);
+        if (!sessionCheckResponse?.success) callback(sessionCheckResponse);
 
-        // EVENT - join-room
         socket.join(`${sessionCode}`);
 
-        socket.data.nickname = nickname || socket.id;
+        // store in local storage
+        // TODO :: reconnect logic add
+        socket.data.nickname = nickname;
         socket.data.sessionCode = sessionCode;
+        socket.data.id = nanoid(10);
 
-        // EVENT user-joined-room
+        await redis.zadd(
+          REDIS_KEYS.Leaderboard(sessionCode),
+          0,
+          `${socket.data.id}`,
+        );
+
+        // @Event :: send the notification
         socket.to(`${sessionCode}`).emit(
-          "user-joined-room",
-          wsSuccessResponse("user-joined-room", {
-            id: socket.id,
-            nickname: socket.data.nickname,
-          })
+          "user-joined-notification",
+          wsSuccessResponse("user-joined", {
+            nickname,
+            userId: socket.data.id,
+          }),
         );
 
-        return callback(
-          wsSuccessResponse("successfully joined the quiz", null)
-        );
+        callback(wsSuccessResponse("user successfully joined the quiz", null));
       } catch (error) {
-        console.error("join-quiz-session error:");
-        return callback(wsFailedResponse("internal error", null));
+        // TODO : Check to send the error messages
+        wsFailedResponse("Failed to join the quiz", null);
       }
     });
 
-    // EVENT
-    socket.to(`${socket.data.sessionCode}`).emit(
-      "all-users",
-      wsSuccessResponse("all-users", {
-        users: io.in(`${socket.data.sessionCode}`).fetchSockets(),
-      })
-    );
-
-    // EVENT
-    socket.on("quiz-started-notify-participations", async (data, callback) => {
+    // @EVENT
+    socket.on("get-all-quiz-user", async (data, callback) => {
       const { sessionCode } = data;
 
-      const sessionCheckResponse = await sessionCheck(sessionCode, "started");
+      const sessionCheckResponse = await sessionCheck(sessionCode, "LIVE");
 
-      if (!sessionCheckResponse.success) return callback(sessionCheckResponse);
+      if (!sessionCheckResponse?.success) callback(sessionCheckResponse);
 
-      // EVENT
-      socket.to(`${sessionCode}`).emit(
-        "quiz-started-notification",
-        wsSuccessResponse("quiz-started", {
-          quizStatusStarted: true,
-        })
-      );
+      const allUser = await io.in(`${sessionCode}`).fetchSockets();
 
-      const questionJson = await redis.lpop(`questions${sessionCode}`);
-
-      // TODO : if the no question
+      // TODO : only send the socket data
+      wsSuccessResponse("all users in quiz", {
+        allUser,
+      });
     });
 
-    //   // EVENT
-    //   socket.on("get-question", async (data, callback) => {
-    //     const { sessionCode } = data;
+    // @EVENT
+    socket.on("quiz-started", async (data, callback) => {
+      const { quizId } = data;
 
-    //     // how to check if the question have to send or not
+      const sessionCode = await redis.get(REDIS_KEYS.SessionCode(quizId));
 
-    //     const sessionCheckResponse = await sessionCheck(sessionCode, "live");
+      const sessionCheckResponse = await sessionCheck(sessionCode, "STARTED");
 
-    //     if (!sessionCheckResponse.success) return sessionCheckResponse;
+      if (!sessionCheckResponse?.success) callback(sessionCheckResponse);
 
-    //     // TODO : should send reponse to
-    //     if (!questionJson) wsSuccessResponse("no question left", null);
+      rooms.set(sessionCode!, new QuizClass(sessionCode!, io, quizId));
 
-    //     const;
+      rooms.get(sessionCode!)?.start();
+    });
 
-    //     return callback(wsSuccessResponse("question", questionJson));
-    //   });
+    // @EVENT
+    socket.on("user-score", async (data, callback) => {
+      const { sessionCode } = data;
+
+      const sessionCheckResponse = await sessionCheck(sessionCode, "STARTED");
+
+      if (!sessionCheckResponse.success) callback(sessionCheckResponse);
+
+      const userScore = await redis.zscore(
+        REDIS_KEYS.Leaderboard(sessionCode),
+        `${socket.data.id}`,
+      );
+
+      callback(
+        "user-score",
+        wsSuccessResponse("user-score", {
+          userScore,
+          nickname: socket.data.nickanme,
+        }),
+      );
+    });
+
+    // @Event
+    socket.on("answer-submit", async (data, callback) => {
+      const ansTime = Date.now();
+
+      const { sessionCode, ansIndex, qId } = data;
+      const sessionCheckResponse = await sessionCheck(sessionCode, "STARTED");
+      if (!sessionCheckResponse.success) callback(sessionCheckResponse);
+
+      const checkAnsResponse = await rooms.get(sessionCode)?.checkAnswer(socket, qId ,ansTime, ansIndex);
+      
+      callback(checkAnsResponse)
+      
+    });
   });
 };
 
-export default establisWsConnection;
+export default establishWsConnection;
