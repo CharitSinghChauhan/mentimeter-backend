@@ -7,10 +7,16 @@ import REDIS_KEYS from "./utils/redis-keys";
 import { nanoid } from "nanoid";
 
 const rooms = new Map<string, QuizClass>();
+// TODO : Add validation of what ?? i think of nickname and sessionCode
+
+let count = 0;
 
 const establishWsConnection = () => {
   io.on("connection", (socket) => {
     // @EVENT :: user joins the quiz and add to room
+
+    console.log(`${count++}:${socket.id}`);
+
     socket.on("user-join-quiz", async (data, callback) => {
       try {
         const { sessionCode, nickname } = data;
@@ -60,25 +66,14 @@ const establishWsConnection = () => {
 
       const allUser = await io.in(`${sessionCode}`).fetchSockets();
 
+      const userNickname = allUser.map((socket) => socket.data.nickname);
+
       // TODO : only send the socket data
-      wsSuccessResponse("all users in quiz", {
-        allUser,
-      });
-    });
-
-    // @EVENT
-    socket.on("quiz-started", async (data, callback) => {
-      const { quizId } = data;
-
-      const sessionCode = await redis.get(REDIS_KEYS.SessionCode(quizId));
-
-      const sessionCheckResponse = await sessionCheck(sessionCode, "STARTED");
-
-      if (!sessionCheckResponse?.success) callback(sessionCheckResponse);
-
-      rooms.set(sessionCode!, new QuizClass(sessionCode!, io, quizId));
-
-      rooms.get(sessionCode!)?.start();
+      callback(
+        wsSuccessResponse("all users in quiz", {
+          userNickname,
+        }),
+      );
     });
 
     // @EVENT
@@ -111,12 +106,23 @@ const establishWsConnection = () => {
       const sessionCheckResponse = await sessionCheck(sessionCode, "STARTED");
       if (!sessionCheckResponse.success) callback(sessionCheckResponse);
 
-      const checkAnsResponse = await rooms.get(sessionCode)?.checkAnswer(socket, qId ,ansTime, ansIndex);
-      
-      callback(checkAnsResponse)
-      
+      const checkAnsResponse = await rooms
+        .get(sessionCode)
+        ?.checkAnswer(socket, qId, ansTime, ansIndex);
+
+      console.log("checkAnsResponse", checkAnsResponse);
+      callback(checkAnsResponse);
     });
   });
+};
+
+export const startedTheQuiz = async (quizId: string, sessionCode: string) => {
+  rooms.set(sessionCode!, new QuizClass(sessionCode!, io, quizId));
+
+  setTimeout(() => {
+    console.log("quiz start");
+    rooms.get(sessionCode!)?.start();
+  }, 5000);
 };
 
 export default establishWsConnection;

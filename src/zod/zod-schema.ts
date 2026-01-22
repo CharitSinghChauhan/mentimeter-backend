@@ -16,15 +16,18 @@ export const questionArraySchema = z.object({
             .string()
             .min(1, "Question must be at least 1 character")
             .max(200, "Question must not exceed 200 characters"),
-          options: z.array(
-            z
-              .string()
-              .min(1, "Option must be at least 1 character")
-              .max(100, "Option must not exceed 100 characters")
-          ),
+          options: z
+            .array(
+              z
+                .string()
+                .min(1, "Option must be at least 1 character")
+                .max(100, "Option must not exceed 100 characters")
+            )
+            .min(2, "At least 2 options required")
+            .max(6, "Maximum 6 options allowed"),
           correctAnsIndex: z
             .number()
-            .positive("correctIndex should be postive"),
+            .nonnegative("correctIndex should be nonnegative"),
           timeLimit: z.number().positive("time limit invalid"),
           points: z.number().positive("points should be positive").optional(),
         })

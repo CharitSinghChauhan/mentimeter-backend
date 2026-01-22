@@ -7,6 +7,8 @@ import { redis } from "bun";
 import REDIS_KEYS from "../ws/utils/redis-keys";
 import io from "..";
 import { nanoid } from "nanoid";
+import { wsSuccessResponse } from "../ws/ws-response";
+import { startedTheQuiz } from "../ws/ws";
 
 export const createQuizController = async (req: Request, res: Response) => {
   const zodResponse = createQuizSchema.safeParse(req.body);
@@ -30,6 +32,7 @@ export const createQuizController = async (req: Request, res: Response) => {
       status: "CREATED",
     },
     select: {
+      id: true,
       title: true,
       status: true,
     },
@@ -51,11 +54,16 @@ export const getAllQuizesOfUser = async (req: Request, res: Response) => {
       id: true,
       title: true,
       status: true,
+      _count: {
+        select: {
+          questions: true,
+        },
+      },
     },
   });
 
   // TODO : if all array is empty
-  return apiResponse(res, 200, "all quizes", { allQuizes });
+  return apiResponse(res, 200, "all quizes", allQuizes);
 };
 
 export const addQuestionToQuiz = async (req: Request, res: Response) => {
@@ -88,7 +96,7 @@ export const addQuestionToQuiz = async (req: Request, res: Response) => {
           type: "MCQ",
           text: data.question,
           options: data.options,
-          correctOptionIndex: data.correctAnsIndex - 1,
+          correctOptionIndex: data.correctAnsIndex,
           timeLimit: data.timeLimit,
           points: data.points,
           // TODO : what if there already questions
@@ -98,29 +106,6 @@ export const addQuestionToQuiz = async (req: Request, res: Response) => {
     ),
   );
 
-  return apiResponse(res, 201, "question add successfully", null);
-};
-
-// TODO : return all the question of the quizes
-
-export const makeQuizLive = async (req: Request, res: Response) => {
-  const quizId = req.params.quizId;
-
-  if (!quizId) throw new ErrorResponse(400, "Quiz ID is required");
-
-  const isQuizExist = await prisma.quiz.findUnique({
-    where: {
-      id: quizId,
-      createdById: req.userId,
-    },
-    select: {
-      id: true,
-      status: true,
-    },
-  });
-
-  if (!isQuizExist) throw new ErrorResponse(404, "quiz does not exist");
-
   await prisma.quiz.update({
     where: {
       id: quizId,
@@ -129,24 +114,27 @@ export const makeQuizLive = async (req: Request, res: Response) => {
     data: {
       status: "LIVE",
     },
-    select: {},
   });
 
   // store in user localStorage
 
-  const sessionCode = nanoid(6);
+  let sessionCode = await redis.get(REDIS_KEYS.SessionCode(quizId));
 
-  // TODO : when session expires delete it
+  if (!sessionCode) {
+    sessionCode = nanoid(6);
+    // TODO : when session expires delete it
+    await redis.set(REDIS_KEYS.SessionCode(quizId), sessionCode);
 
-  await redis.set(REDIS_KEYS.SessionCode(quizId), sessionCode);
+    await redis.hset(REDIS_KEYS.CurrentQuiz(sessionCode), {
+      quizId: quizId,
+      status: "LIVE",
+    });
+  }
 
-  await redis.hset(REDIS_KEYS.CurrentQuiz(sessionCode), {
-    quizId: quizId,
-    status: "LIVE",
-  });
-
-  return apiResponse(res, 204, "quiz is now live", { sessionCode });
+  return apiResponse(res, 200, "quiz is now live", { sessionCode });
 };
+
+// TODO : return all the question of the quizes
 
 export const startQuiz = async (req: Request, res: Response) => {
   const quizId = req.params.quizId;
@@ -156,6 +144,7 @@ export const startQuiz = async (req: Request, res: Response) => {
   const isQuizExist = await prisma.quiz.findUnique({
     where: {
       id: quizId,
+      createdById: req.userId,
     },
     select: {
       status: true,
@@ -164,8 +153,8 @@ export const startQuiz = async (req: Request, res: Response) => {
 
   if (!isQuizExist) throw new ErrorResponse(404, "quiz does not exist");
 
-  if (isQuizExist.status === "LIVE")
-    throw new ErrorResponse(409, "quiz is already live");
+  if (isQuizExist.status === "STARTED")
+    throw new ErrorResponse(409, "quiz is already started");
 
   await prisma.quiz.update({
     where: {
@@ -200,7 +189,110 @@ export const startQuiz = async (req: Request, res: Response) => {
   for (const q of quizQuestions)
     await redis.rpush(REDIS_KEYS.Question(sessionCode), JSON.stringify(q));
 
-  io.to(`${sessionCode}`).emit("quiz-started", { quizId });
+  io.to(`${sessionCode}`).emit(
+    "quiz-started",
+    wsSuccessResponse("quiz-started", {
+      quizId,
+    }),
+  );
 
-  return apiResponse(res, 200, "Quiz is live", null);
+  startedTheQuiz(quizId, sessionCode);
+
+  return apiResponse(res, 200, "Quiz is Started", null);
+};
+
+export const quizStatus = async (req: Request, res: Response) => {
+  const { quizId } = req.body;
+
+  const status = await prisma.quiz.findFirst({
+    where: {
+      id: quizId,
+      createdById: req.userId,
+    },
+    select: {
+      status: true,
+    },
+  });
+
+  return apiResponse(res, 200, "quiz status", {
+    status,
+  });
+};
+
+export const getSessionCode = async (req: Request, res: Response) => {
+  const { quizId } = req.body;
+
+  if (!quizId) throw new ErrorResponse(404, "quizId is missing");
+
+  const sessionCode = await redis.get(REDIS_KEYS.SessionCode(quizId));
+
+  console.log(sessionCode);
+
+  if (!sessionCode) throw new ErrorResponse(404, "session code missing ");
+
+  return apiResponse(res, 200, "session code", {
+    sessionCode,
+  });
+};
+
+// TODO : change the name
+// TODO : READ the code base
+export const checkUserQuiz = async (req: Request, res: Response) => {
+  const { sessionCode } = req.params;
+
+  if (!sessionCode) throw new ErrorResponse(400, "sessionCode is required");
+
+  const quizData = await redis.hgetall(REDIS_KEYS.CurrentQuiz(sessionCode));
+
+  if (!quizData || !quizData?.quizId) {
+    return apiResponse(res, 200, "Session check", { isOwner: false });
+  }
+
+  const isQuizExist = await prisma.quiz.findFirst({
+    where: {
+      id: quizData.quizId,
+      createdById: req.userId,
+    },
+    select: {
+      id: true,
+      status: true,
+    },
+  });
+
+  if (!isQuizExist) throw new ErrorResponse(404, "quiz does not exist");
+
+  return apiResponse(res, 200, "Quiz belongs to user", {
+    isOwner: !!isQuizExist,
+  });
+};
+
+export const deleteQuiz = async (req: Request, res: Response) => {
+  const { quizId } = req.params;
+
+  if (!quizId) throw new ErrorResponse(400, "Quiz ID is required");
+
+  const quiz = await prisma.quiz.findFirst({
+    where: {
+      id: quizId,
+      createdById: req.userId,
+    },
+  });
+
+  if (!quiz) throw new ErrorResponse(404, "Quiz not found");
+
+  const sessionCode = await redis.get(REDIS_KEYS.SessionCode(quizId));
+
+  if (sessionCode) {
+    await redis.del(REDIS_KEYS.SessionCode(quizId));
+    await redis.del(REDIS_KEYS.CurrentQuiz(sessionCode));
+    await redis.del(REDIS_KEYS.Question(sessionCode));
+  }
+
+  await prisma.quiz.delete({
+    where: {
+      id: quizId,
+    },
+  });
+
+  return apiResponse(res, 200, "Quiz deleted successfully", null);
 };

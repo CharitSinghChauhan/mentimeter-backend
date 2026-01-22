@@ -76,7 +76,7 @@ model Question {
   correctOptionIndex Int
   timeLimit          Int // in sec
   points             Int      @default(100)
-  orderIndex         Int
+  orderIndex         Int      @unique
   createdAt          DateTime @default(now()) @db.Timestamp(6)
 }
 
