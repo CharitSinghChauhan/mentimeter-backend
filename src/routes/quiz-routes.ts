@@ -1,26 +1,32 @@
 import { Router } from "express";
 import {
-  addQuestionToQuiz,
-  checkUserQuiz,
   createQuizController,
-  deleteQuiz,
-  getAllQuizesOfUser,
-  getSessionCode,
-  quizStatus,
-  startQuiz,
-} from "../controllers/quiz-controllers";
-import authMiddleware from "../middleware/auth-middleware";
+  deleteQuizController,
+  getAllQuestionOfQuizController,
+  getAllQuizesOfUserController,
+} from "../controllers/quiz-crud";
+import {
+  addQuestionToQuizController,
+  makeQuizLiveController,
+  quizStatusController,
+  startQuizController,
+} from "../controllers/quiz-lifecycle";
+import {
+  checkUserQuizController,
+  getSessionCodeController,
+} from "../controllers/quiz-session";
 
 const router = Router();
 
 router.post("/create-quiz", createQuizController);
-router.get("/all-quizes", getAllQuizesOfUser);
-router.post("/add-question/:quizId", addQuestionToQuiz);
-// TODO : get the all the question of the quiz with quizId
-router.post("/start-quiz/:quizId", startQuiz);
-router.post("/session-code", getSessionCode);
-router.post("/quiz-status", quizStatus);
-router.get("/verify-owner/:sessionCode", checkUserQuiz)
-router.post("/delete/:quizId", deleteQuiz)
+router.get("/all-quizes", getAllQuizesOfUserController);
+router.post("/add-question/:quizId", addQuestionToQuizController);
+router.post("/get-questions", getAllQuestionOfQuizController);
+router.post("/make-quiz-live/:quizId", makeQuizLiveController);
+router.post("/start-quiz/:quizId", startQuizController);
+router.post("/session-code", getSessionCodeController);
+router.post("/quiz-status", quizStatusController);
+router.get("/verify-owner/:sessionCode", checkUserQuizController);
+router.post("/delete/:quizId", deleteQuizController);
 
 export default router;

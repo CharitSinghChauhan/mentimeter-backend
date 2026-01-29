@@ -2,7 +2,6 @@ import { redis } from "bun";
 import { Socket, type Server } from "socket.io";
 import REDIS_KEYS from "./utils/redis-keys";
 import { wsFailedResponse, wsSuccessResponse } from "./ws-response";
-import { th } from "zod/v4/locales";
 import prisma from "../lib/prisma";
 
 interface IQuestion {
@@ -138,12 +137,10 @@ class QuizClass {
       await redis.zincrby(
         REDIS_KEYS.Leaderboard(this.sessionCode),
         score,
-        `${socket.data.id}`,
+        `${socket.data.nickname}`,
       );
 
       await redis.sadd(REDIS_KEYS.AnsUsers(this.currentQuestion.id), socket.id);
-
-      // TODO : show the options choosen by other user
     }
 
     return wsSuccessResponse("check-ans-response", {
