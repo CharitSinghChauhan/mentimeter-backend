@@ -8,12 +8,17 @@ import authMiddleware from "./middleware/auth-middleware";
 
 const app = express();
 
+export const origin =
+  process.env.NODE_ENV === "production"
+    ? process.env.FRONTEND_URL
+    : "http://localhost:3000";
+
 app.use(
   cors({
-    origin: "http://localhost:3000", // Replace with your frontend's origin
-    methods: ["GET", "POST", "PUT", "DELETE"], // Specify allowed HTTP methods
-    credentials: true, // Allow credentials (cookies, authorization headers, etc.)
-  })
+    origin: origin,
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+  }),
 );
 
 app.all("/api/auth/*splat", toNodeHandler(auth));
