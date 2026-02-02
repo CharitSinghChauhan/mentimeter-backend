@@ -8,10 +8,7 @@ import authMiddleware from "./middleware/auth-middleware";
 
 const app = express();
 
-export const origin =
-  process.env.NODE_ENV === "production"
-    ? process.env.FRONTEND_URL
-    : "http://localhost:3000";
+const origin = process.env.FRONTEND_URL!;
 
 app.use(
   cors({
