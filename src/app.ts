@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { toNodeHandler } from "better-auth/node";
 import cors from "cors";
 import { auth } from "./lib/auth";
