@@ -13,7 +13,7 @@ const origin = process.env.FRONTEND_URL!;
 
 app.use(
   cors({
-    origin: origin,
+    origin: [origin, "https://live-quizzes.vercel.app"],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   }),
