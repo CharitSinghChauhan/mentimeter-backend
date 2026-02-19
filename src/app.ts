@@ -20,8 +20,8 @@ app.use(
 );
 
 app.all("/api/auth/*splat", toNodeHandler(auth));
-app.use(express.json());
 
+app.use(express.json());
 app.use("/api/v1/quiz", authMiddleware, quizRouter);
 
 app.use(errorMiddleware);

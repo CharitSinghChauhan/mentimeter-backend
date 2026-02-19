@@ -4,6 +4,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import prisma from "./prisma";
 
 export const origin = process.env.FRONTEND_URL!;
+export const backendUrl = process.env.BETTER_AUTH_URL!;
 
 console.log("origin", origin);
 
@@ -15,8 +16,8 @@ export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
-  baseURL: process.env.BETTER_AUTH_URL!,
-  trustedOrigins: [origin],
+  baseURL: backendUrl,
+  trustedOrigins: [origin, backendUrl],
   socialProviders: {
     google: {
       clientId: process.env.GOOGLE_CLIENT_ID as string,
