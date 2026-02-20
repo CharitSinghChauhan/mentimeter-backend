@@ -6,6 +6,7 @@ import quizRouter from "./routes/quiz-routes";
 import errorMiddleware from "./middleware/error-middleware";
 import express from "express";
 import authMiddleware from "./middleware/auth-middleware";
+import cookieParser from "cookie-parser";
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.use(
     credentials: true,
   }),
 );
+app.use(cookieParser());
 
 app.all("/api/auth/*splat", toNodeHandler(auth));
 
