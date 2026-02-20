@@ -9,11 +9,19 @@ import authMiddleware from "./middleware/auth-middleware";
 
 const app = express();
 
+// Trust proxy - REQUIRED for production (Render, Vercel, etc.)
+// Without this, secure cookies won't work behind proxies
+app.set("trust proxy", 1);
+
 const origin = process.env.FRONTEND_URL!;
 
 app.use(
   cors({
-    origin: [origin, "https://live-quizzes.vercel.app"],
+    origin: [
+      origin,
+      "http://localhost:3000",
+      "https://live-quizzes.vercel.app",
+    ],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   }),
@@ -22,6 +30,11 @@ app.use(
 app.all("/api/auth/*splat", toNodeHandler(auth));
 
 app.use(express.json());
+app.use((req, res, next) => {
+  console.log("Incoming Cookies:", req.headers.cookie);
+  console.log("Parsed Cookies:", req.cookies);
+  next();
+});
 app.use("/api/v1/quiz", authMiddleware, quizRouter);
 
 app.use(errorMiddleware);

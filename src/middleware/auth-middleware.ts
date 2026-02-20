@@ -14,11 +14,18 @@ declare global {
 const authMiddleware = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
-  const userId = (await auth.api.getSession({
+  console.log("📥 Incoming cookies:", req.headers.cookie);
+  console.log("📥 All headers:", req.headers);
+
+  const session = await auth.api.getSession({
     headers: fromNodeHeaders(req.headers),
-  }))?.user.id;
+  });
+
+  console.log("📥 Session result:", session);
+
+  const userId = session?.user.id;
 
   if (!userId) throw new ErrorResponse(401, "Unauthorized");
 

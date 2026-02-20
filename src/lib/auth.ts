@@ -6,12 +6,22 @@ import prisma from "./prisma";
 export const origin = process.env.FRONTEND_URL!;
 export const backendUrl = process.env.BETTER_AUTH_URL!;
 
+// Extract domain from origin for cross-domain cookies
+const getCookieDomain = (url: string) => {
+  try {
+    const urlObj = new URL(url);
+    return urlObj.hostname; // e.g., "mentimeter-backend.onrender.com"
+  } catch {
+    return undefined;
+  }
+};
+
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
   baseURL: backendUrl,
-  trustedOrigins: [origin, backendUrl],
+  trustedOrigins: [origin, backendUrl, "http://localhost:3000"],
   cookiePrefix: "better-auth",
   cookies: {
     sameSite: "none",
@@ -20,7 +30,7 @@ export const auth = betterAuth({
   advanced: {
     crossSubDomainCookies: {
       enabled: true,
-      domain: origin,
+      domain: getCookieDomain(origin),
     },
   },
   socialProviders: {
