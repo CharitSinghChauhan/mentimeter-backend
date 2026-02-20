@@ -12,7 +12,7 @@ const app = express();
 
 // Trust proxy - REQUIRED for production (Render, Vercel, etc.)
 // Without this, secure cookies won't work behind proxies
-app.set("trust proxy", 1);
+
 
 const origin = process.env.FRONTEND_URL!;
 
@@ -28,6 +28,15 @@ app.use(
   }),
 );
 app.use(cookieParser());
+
+app.set("trust proxy", 1);
+
+app.get("/api/auth/callback/google", (req, res, next) => {
+  console.log("==== CALLBACK HIT ====");
+  console.log("State from Google:", req.query.state);
+  console.log("Cookies received:", req.headers.cookie);
+  next();
+});
 
 app.all("/api/auth/*splat", toNodeHandler(auth));
 
