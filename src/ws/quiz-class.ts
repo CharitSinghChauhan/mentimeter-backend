@@ -45,7 +45,6 @@ class QuizClass {
       // TODO : store in the database score of the quiz Top 10
 
       // TODO : end the quiz
-      console.log("quiz ended");
       return this.io
         .to(this.sessionCode)
         .emit("quiz-end", wsSuccessResponse("quiz-end-result", null));
@@ -79,8 +78,6 @@ class QuizClass {
       "REV",
       "WITHSCORES",
     );
-
-    console.log("top10UsersWithScore", top10UsersWithScore);
 
     this.io.to(this.sessionCode).emit(
       "top-10-users-with-score-and-name",
@@ -131,8 +128,6 @@ class QuizClass {
       const score =
         this.currentQuestion.points +
         Math.floor(this.currentQuestion.points / remainingTime);
-
-      console.log("score: ", score);
 
       await redis.zincrby(
         REDIS_KEYS.Leaderboard(this.sessionCode),

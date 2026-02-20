@@ -23,9 +23,8 @@ const io = new Server(server, {
   try {
     await prisma.$connect();
     establishWsConnection();
-    server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    server.listen(PORT, () => /* Server ready */ {});
   } catch (error) {
-    console.error("Failed to connect to database:", error);
     process.exit(1);
   }
 })();

@@ -1,7 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
-import { auth } from "../lib/auth";
+import { getSessionFromToken, COOKIE } from "../lib/auth";
 import ErrorResponse from "../utils/error-response";
-import { fromNodeHeaders } from "better-auth/node";
 
 declare global {
   namespace Express {
@@ -13,23 +12,15 @@ declare global {
 
 const authMiddleware = async (
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction,
 ) => {
-  console.log("📥 Incoming cookies:", req.headers.cookie);
-  console.log("📥 All headers:", req.headers);
+  const token = req.cookies?.[COOKIE.name];
+  const session = await getSessionFromToken(token);
 
-  const session = await auth.api.getSession({
-    headers: fromNodeHeaders(req.headers),
-  });
+  if (!session?.user?.id) throw new ErrorResponse(401, "Unauthorized");
 
-  console.log("📥 Session result:", session);
-
-  const userId = session?.user.id;
-
-  if (!userId) throw new ErrorResponse(401, "Unauthorized");
-
-  req.userId = userId;
+  req.userId = session.user.id;
   next();
 };
 

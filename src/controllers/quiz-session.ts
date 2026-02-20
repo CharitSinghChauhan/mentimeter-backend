@@ -12,8 +12,6 @@ export const getSessionCodeController = async (req: Request, res: Response) => {
 
   const sessionCode = await redis.get(REDIS_KEYS.SessionCode(quizId));
 
-  console.log(sessionCode);
-
   if (!sessionCode) throw new ErrorResponse(404, "session code missing ");
 
   return apiResponse(res, 200, "session code", {

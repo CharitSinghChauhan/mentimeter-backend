@@ -35,10 +35,6 @@ export const addQuestionToQuizController = async (
 
   if (!isQuizExist) throw new ErrorResponse(404, "quiz does not exist");
 
-  zodResponse.data.questions.forEach((_, index) => {
-    console.log(_, index);
-  });
-
   await prisma.$transaction(
     zodResponse.data.questions.map((data, index) =>
       prisma.question.create({

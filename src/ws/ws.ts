@@ -15,7 +15,7 @@ const establishWsConnection = () => {
   io.on("connection", (socket) => {
     // @EVENT :: user joins the quiz and add to room
 
-    console.log(`${count++}:${socket.id}`);
+    // Connection established
 
     socket.on("user-join-quiz", async (data, callback) => {
       try {
@@ -110,7 +110,6 @@ const establishWsConnection = () => {
         .get(sessionCode)
         ?.checkAnswer(socket, qId, ansTime, ansIndex);
 
-      console.log("checkAnsResponse", checkAnsResponse);
       callback(checkAnsResponse);
     });
   });
@@ -120,7 +119,6 @@ export const startedTheQuiz = async (quizId: string, sessionCode: string) => {
   rooms.set(sessionCode!, new QuizClass(sessionCode!, io, quizId));
 
   setTimeout(() => {
-    console.log("quiz start");
     rooms.get(sessionCode!)?.start();
   }, 5000);
 };
